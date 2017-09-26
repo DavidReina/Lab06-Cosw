@@ -32,6 +32,14 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import edu.eci.cosw.examples.productorders.services.ApplicationServices;
 import edu.eci.cosw.examples.productorders.services.ServicesException;
+import edu.eci.cosw.samples.model.Pedido;
+import edu.eci.cosw.samples.model.Vehiculo;
+import java.util.Iterator;
+import javax.sql.rowset.serial.SerialBlob;
+import org.springframework.util.StreamUtils;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.MultipartHttpServletRequest;
 
 /**
  *
@@ -55,6 +63,53 @@ public class DispatchController {
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
+    
+     @RequestMapping(value = "/{id}/qrcode", method = RequestMethod.GET)
+    @ResponseBody
+    public ResponseEntity<InputStreamResource> getQRCode(@PathVariable Integer id) {
+		try {            
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType("image/png"))
+                    .body(new InputStreamResource(  services.dispatchByID(id).getQrcode().getBinaryStream()     ));
+        } catch (ServicesException ex) {
+            Logger.getLogger(DispatchController.class.getName()).log(Level.SEVERE, null, ex);
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+            
+        } catch (SQLException ex) {
+            Logger.getLogger(DispatchController.class.getName()).log(Level.SEVERE, null, ex);
+            return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    
+    }
+    @RequestMapping(
+            value = "/upload",
+            method = RequestMethod.POST
+    )
+    public ResponseEntity uploadFile(MultipartHttpServletRequest request, @RequestParam(name = "idpedido") int idpedido, @RequestParam(name = "idvehiculo") String idVehiculo) {
+
+        try {
+            Iterator<String> itr = request.getFileNames();
+
+            while (itr.hasNext()) {
+                String uploadedFile = itr.next();
+                MultipartFile file = request.getFile(uploadedFile);
+
+                Pedido p = services.orderById(idpedido);
+                Vehiculo v = services.vehicleById(idVehiculo);
+
+                Despacho des = new Despacho(p, v);
+                des.setQrcode(new SerialBlob(StreamUtils.copyToByteArray(file.getInputStream())));
+
+                //-->> GUARDAR EL DESPACHO A TRAVÉS DEL SERVICIO CREADO               
+                services.registerDistpatch(des);
+            }
+        } catch (Exception e) {
+            return new ResponseEntity<>("{}", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        return new ResponseEntity<>("{}", HttpStatus.OK);
+    }
+
 
     
 }
